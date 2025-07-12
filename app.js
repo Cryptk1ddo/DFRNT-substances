@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// Destructure React hooks for browser use
+const { useState, useEffect } = React;
 
 // Add custom CSS for sliders
 const sliderStyles = `
