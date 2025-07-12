@@ -1,0 +1,35 @@
+{
+  "name": "productivity-hub",
+  "version": "1.0.0",
+  "description": "A comprehensive productivity hub with neuroscience-based tools including nootropics, binaural beats, pomodoro timer, and training programs",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "dev": "python -m http.server 8000",
+    "build": "echo 'No build process needed for static files'",
+    "deploy": "echo 'Deploy to GitHub Pages by pushing to main branch'"
+  },
+  "keywords": [
+    "productivity",
+    "nootropics",
+    "binaural-beats",
+    "pomodoro",
+    "cognitive-enhancement",
+    "neuroscience",
+    "telegram-mini-app"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/productivity-hub.git"
+  },
+  "homepage": "https://yourusername.github.io/productivity-hub",
+  "dependencies": {},
+  "devDependencies": {},
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+} 

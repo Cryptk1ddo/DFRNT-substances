@@ -1,11 +1,119 @@
 import React, { useState, useEffect } from 'react';
 
-// Main App Component
-const App = () => {
-    const [view, setView] = useState('goalSelection'); // 'goalSelection', 'recommendation', 'library'
-    const [selectedGoal, setSelectedGoal] = useState(null);
-    const [showModal, setShowModal] = useState(false); // State for modal visibility
-    const [selectedNootropicForModal, setSelectedNootropicForModal] = useState(null); // State for nootropic in modal
+// Add custom CSS for sliders
+const sliderStyles = `
+    .slider::-webkit-slider-thumb {
+        appearance: none;
+        height: 20px;
+        width: 20px;
+        border-radius: 50%;
+        background: #ea580c;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(234, 88, 12, 0.3);
+    }
+    
+    .slider::-moz-range-thumb {
+        height: 20px;
+        width: 20px;
+        border-radius: 50%;
+        background: #ea580c;
+        cursor: pointer;
+        border: none;
+        box-shadow: 0 0 10px rgba(234, 88, 12, 0.3);
+    }
+    
+    .slider::-webkit-slider-track {
+        background: #374151;
+        border-radius: 8px;
+        height: 8px;
+    }
+    
+    .slider::-moz-range-track {
+        background: #374151;
+        border-radius: 8px;
+        height: 8px;
+        border: none;
+    }
+`;
+
+    // Main App Component
+    const App = () => {
+        const [view, setView] = useState('nootropics'); // 'nootropics', 'binauralBeats', 'pomodoro', 'training'
+        const [selectedGoal, setSelectedGoal] = useState(null);
+        const [showModal, setShowModal] = useState(false); // State for modal visibility
+        const [selectedNootropicForModal, setSelectedNootropicForModal] = useState(null); // State for nootropic in modal
+
+        // Telegram Web App Integration
+        useEffect(() => {
+            // Check if running in Telegram Web App
+            if (window.Telegram && window.Telegram.WebApp) {
+                const tg = window.Telegram.WebApp;
+                tg.ready();
+                tg.expand();
+                
+                // Set theme colors
+                tg.setHeaderColor('#ea580c');
+                tg.setBackgroundColor('#111827');
+                
+                // Enable closing confirmation
+                tg.enableClosingConfirmation();
+                
+                console.log('Telegram Web App initialized');
+            }
+        }, []);
+
+    // Navigation component
+    const Navigation = () => (
+        <nav className="bg-gray-900 border-b border-orange-800 sticky top-0 z-40">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-between h-16">
+                    <div className="flex items-center">
+                        <h1 className="text-2xl font-bold text-orange-400">Productivity Hub</h1>
+                    </div>
+                    <div className="flex space-x-1">
+                        <NavButton
+                            active={view === 'nootropics'}
+                            onClick={() => setView('nootropics')}
+                            icon="🧠"
+                            label="Nootropics"
+                        />
+                        <NavButton
+                            active={view === 'binauralBeats'}
+                            onClick={() => setView('binauralBeats')}
+                            icon="🎵"
+                            label="Binaural Beats"
+                        />
+                        <NavButton
+                            active={view === 'pomodoro'}
+                            onClick={() => setView('pomodoro')}
+                            icon="⏰"
+                            label="Pomodoro"
+                        />
+                        <NavButton
+                            active={view === 'training'}
+                            onClick={() => setView('training')}
+                            icon="💪"
+                            label="Training"
+                        />
+                    </div>
+                </div>
+            </div>
+        </nav>
+    );
+
+    const NavButton = ({ active, onClick, icon, label }) => (
+        <button
+            onClick={onClick}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
+                active
+                    ? 'bg-orange-600 text-white shadow-lg'
+                    : 'text-gray-300 hover:text-orange-400 hover:bg-gray-800'
+            }`}
+        >
+            <span className="text-lg">{icon}</span>
+            <span className="hidden sm:inline">{label}</span>
+        </button>
+    );
 
     // Data for Nootropic Library and Stacks
     const nootropicsData = [
@@ -952,17 +1060,617 @@ const App = () => {
         );
     };
 
-    // Render logic based on view state
-    switch (view) {
-        case 'goalSelection':
-            return <GoalSelection />;
-        case 'recommendation':
-            return <RecommendationDisplay />;
-        case 'library':
-            return <SupplementLibrary />;
-        default:
-            return <GoalSelection />;
-    }
+    // Binaural Beats Component
+    const BinauralBeats = () => {
+        const [isPlaying, setIsPlaying] = useState(false);
+        const [currentFrequency, setCurrentFrequency] = useState(10);
+        const [volume, setVolume] = useState(0.5);
+        const [audioContext, setAudioContext] = useState(null);
+        const [oscillators, setOscillators] = useState({ left: null, right: null });
+
+        const frequencyPresets = [
+            { name: 'Deep Sleep', frequency: 0.5, description: 'Delta waves for deep restorative sleep' },
+            { name: 'Light Sleep', frequency: 4, description: 'Theta waves for light sleep and meditation' },
+            { name: 'Relaxation', frequency: 8, description: 'Alpha waves for relaxation and stress relief' },
+            { name: 'Focus', frequency: 10, description: 'Alpha waves for enhanced focus and concentration' },
+            { name: 'Creativity', frequency: 12, description: 'Alpha waves for creative thinking' },
+            { name: 'Alertness', frequency: 16, description: 'Beta waves for alertness and active thinking' },
+            { name: 'High Focus', frequency: 20, description: 'Beta waves for high concentration tasks' },
+            { name: 'Problem Solving', frequency: 25, description: 'Beta waves for analytical thinking' },
+            { name: 'Insight', frequency: 40, description: 'Gamma waves for insight and peak performance' }
+        ];
+
+        const startBinauralBeats = () => {
+            if (!audioContext) {
+                const newAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                setAudioContext(newAudioContext);
+                
+                const leftOsc = newAudioContext.createOscillator();
+                const rightOsc = newAudioContext.createOscillator();
+                const leftGain = newAudioContext.createGain();
+                const rightGain = newAudioContext.createGain();
+                const merger = newAudioContext.createChannelMerger(2);
+
+                // Set up left channel (base frequency)
+                leftOsc.frequency.setValueAtTime(200, newAudioContext.currentTime);
+                leftOsc.connect(leftGain);
+                leftGain.connect(merger, 0, 0);
+                leftGain.gain.setValueAtTime(volume, newAudioContext.currentTime);
+
+                // Set up right channel (base frequency + binaural frequency)
+                rightOsc.frequency.setValueAtTime(200 + currentFrequency, newAudioContext.currentTime);
+                rightOsc.connect(rightGain);
+                rightGain.connect(merger, 0, 1);
+                rightGain.gain.setValueAtTime(volume, newAudioContext.currentTime);
+
+                // Start oscillators
+                leftOsc.start();
+                rightOsc.start();
+
+                setOscillators({ left: leftOsc, right: rightOsc });
+                setIsPlaying(true);
+            } else {
+                // Resume existing context
+                audioContext.resume();
+                setIsPlaying(true);
+            }
+        };
+
+        const stopBinauralBeats = () => {
+            if (audioContext) {
+                audioContext.suspend();
+                setIsPlaying(false);
+            }
+            if (oscillators.left && oscillators.right) {
+                oscillators.left.stop();
+                oscillators.right.stop();
+                setOscillators({ left: null, right: null });
+            }
+        };
+
+        const updateFrequency = (freq) => {
+            setCurrentFrequency(freq);
+            if (isPlaying && oscillators.left && oscillators.right) {
+                oscillators.left.frequency.setValueAtTime(200, audioContext.currentTime);
+                oscillators.right.frequency.setValueAtTime(200 + freq, audioContext.currentTime);
+            }
+        };
+
+        const updateVolume = (vol) => {
+            setVolume(vol);
+            if (isPlaying && oscillators.left && oscillators.right) {
+                // Note: We'd need to store gain nodes to update volume dynamically
+                // For simplicity, we'll restart with new volume
+                stopBinauralBeats();
+                setTimeout(() => startBinauralBeats(), 100);
+            }
+        };
+
+        return (
+            <div className="flex flex-col items-center p-8 bg-gradient-to-br from-gray-900 to-black min-h-screen text-gray-100">
+                <h1 className="text-4xl font-extrabold text-orange-400 mb-8 text-center leading-tight">
+                    Binaural Beats Generator
+                </h1>
+                <p className="text-xl text-gray-300 mb-10 text-center max-w-3xl">
+                    Harness the power of brainwave entrainment to optimize your mental state for different activities.
+                </p>
+
+                <div className="bg-gray-800 rounded-2xl shadow-xl p-8 max-w-4xl w-full border-b-4 border-orange-700">
+                    {/* Frequency Presets */}
+                    <h2 className="text-3xl font-bold text-orange-400 mb-6 border-b pb-4 border-orange-800">
+                        Frequency Presets
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                        {frequencyPresets.map((preset, index) => (
+                            <div
+                                key={index}
+                                className={`p-4 rounded-xl cursor-pointer transition-all duration-200 ${
+                                    currentFrequency === preset.frequency
+                                        ? 'bg-orange-600 text-white'
+                                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                                }`}
+                                onClick={() => updateFrequency(preset.frequency)}
+                            >
+                                <h3 className="font-bold text-lg mb-1">{preset.name}</h3>
+                                <p className="text-sm opacity-80">{preset.frequency} Hz</p>
+                                <p className="text-xs mt-2 opacity-70">{preset.description}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Custom Frequency Control */}
+                    <h2 className="text-3xl font-bold text-orange-400 mb-6 border-b pb-4 border-orange-800">
+                        Custom Controls
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                        <div>
+                            <label className="block text-gray-200 font-semibold mb-2">
+                                Frequency: {currentFrequency} Hz
+                            </label>
+                            <input
+                                type="range"
+                                min="0.5"
+                                max="40"
+                                step="0.5"
+                                value={currentFrequency}
+                                onChange={(e) => updateFrequency(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                            <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                <span>0.5 Hz</span>
+                                <span>40 Hz</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-gray-200 font-semibold mb-2">
+                                Volume: {Math.round(volume * 100)}%
+                            </label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={volume}
+                                onChange={(e) => updateVolume(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                            <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                <span>0%</span>
+                                <span>100%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Playback Controls */}
+                    <div className="flex justify-center space-x-4">
+                        <button
+                            onClick={isPlaying ? stopBinauralBeats : startBinauralBeats}
+                            className={`px-8 py-4 text-xl font-bold rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 ${
+                                isPlaying
+                                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                                    : 'bg-green-600 hover:bg-green-700 text-white'
+                            }`}
+                        >
+                            {isPlaying ? '⏹️ Stop' : '▶️ Start'}
+                        </button>
+                    </div>
+
+                    {/* Information Panel */}
+                    <div className="mt-8 bg-gray-900 rounded-xl p-6">
+                        <h3 className="text-xl font-bold text-orange-300 mb-4">How Binaural Beats Work</h3>
+                        <p className="text-gray-300 leading-relaxed mb-4">
+                            Binaural beats occur when two slightly different frequencies are presented to each ear. 
+                            Your brain perceives a third frequency equal to the difference between the two, 
+                            which can help entrain your brainwaves to specific states.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <h4 className="font-semibold text-orange-400 mb-2">Brainwave States:</h4>
+                                <ul className="text-gray-300 space-y-1">
+                                    <li><strong>Delta (0.5-4 Hz):</strong> Deep sleep, healing</li>
+                                    <li><strong>Theta (4-8 Hz):</strong> Meditation, creativity</li>
+                                    <li><strong>Alpha (8-13 Hz):</strong> Relaxation, focus</li>
+                                    <li><strong>Beta (13-30 Hz):</strong> Alertness, concentration</li>
+                                    <li><strong>Gamma (30-100 Hz):</strong> Insight, peak performance</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-orange-400 mb-2">Usage Tips:</h4>
+                                <ul className="text-gray-300 space-y-1">
+                                    <li>• Use headphones for best results</li>
+                                    <li>• Start with 10-15 minute sessions</li>
+                                    <li>• Find a quiet, comfortable environment</li>
+                                    <li>• Be patient - effects may take time</li>
+                                    <li>• Don't use while driving or operating machinery</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Placeholder components for future features
+    const PomodoroTimer = () => {
+        const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes in seconds
+        const [isRunning, setIsRunning] = useState(false);
+        const [isBreak, setIsBreak] = useState(false);
+        const [sessions, setSessions] = useState(0);
+        const [timerMode, setTimerMode] = useState('work'); // 'work', 'shortBreak', 'longBreak'
+
+        const timerSettings = {
+            work: 25 * 60,
+            shortBreak: 5 * 60,
+            longBreak: 15 * 60
+        };
+
+        useEffect(() => {
+            let interval = null;
+            if (isRunning && timeLeft > 0) {
+                interval = setInterval(() => {
+                    setTimeLeft(timeLeft - 1);
+                }, 1000);
+            } else if (timeLeft === 0) {
+                setIsRunning(false);
+                // Play notification sound
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('Pomodoro Timer', {
+                        body: isBreak ? 'Break time is over! Time to work!' : 'Work session complete! Take a break!',
+                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ea580c"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
+                    });
+                }
+                // Auto-switch to next mode
+                if (!isBreak) {
+                    setSessions(sessions + 1);
+                    if (sessions % 4 === 3) {
+                        setTimerMode('longBreak');
+                        setTimeLeft(timerSettings.longBreak);
+                    } else {
+                        setTimerMode('shortBreak');
+                        setTimeLeft(timerSettings.shortBreak);
+                    }
+                    setIsBreak(true);
+                } else {
+                    setTimerMode('work');
+                    setTimeLeft(timerSettings.work);
+                    setIsBreak(false);
+                }
+            }
+            return () => clearInterval(interval);
+        }, [isRunning, timeLeft, isBreak, sessions, timerMode]);
+
+        const startTimer = () => {
+            setIsRunning(true);
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        };
+
+        const pauseTimer = () => {
+            setIsRunning(false);
+        };
+
+        const resetTimer = () => {
+            setIsRunning(false);
+            setTimeLeft(timerSettings[timerMode]);
+        };
+
+        const switchMode = (mode) => {
+            setTimerMode(mode);
+            setTimeLeft(timerSettings[mode]);
+            setIsRunning(false);
+            setIsBreak(mode !== 'work');
+        };
+
+        const formatTime = (seconds) => {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        };
+
+        const getProgress = () => {
+            const total = timerSettings[timerMode];
+            return ((total - timeLeft) / total) * 100;
+        };
+
+        return (
+            <div className="flex flex-col items-center p-8 bg-gradient-to-br from-gray-900 to-black min-h-screen text-gray-100">
+                <h1 className="text-4xl font-extrabold text-orange-400 mb-8 text-center leading-tight">
+                    Pomodoro Timer
+                </h1>
+                <p className="text-xl text-gray-300 mb-10 text-center max-w-3xl">
+                    Master the art of focused work with timed productivity sessions.
+                </p>
+
+                <div className="bg-gray-800 rounded-2xl shadow-xl p-8 max-w-2xl w-full border-b-4 border-orange-700">
+                    {/* Timer Display */}
+                    <div className="text-center mb-8">
+                        <div className="relative w-64 h-64 mx-auto mb-6">
+                            {/* Progress Circle */}
+                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                                <circle
+                                    cx="50"
+                                    cy="50"
+                                    r="45"
+                                    fill="none"
+                                    stroke="#374151"
+                                    strokeWidth="8"
+                                />
+                                <circle
+                                    cx="50"
+                                    cy="50"
+                                    r="45"
+                                    fill="none"
+                                    stroke="#ea580c"
+                                    strokeWidth="8"
+                                    strokeDasharray={`${2 * Math.PI * 45}`}
+                                    strokeDashoffset={`${2 * Math.PI * 45 * (1 - getProgress() / 100)}`}
+                                    strokeLinecap="round"
+                                    className="transition-all duration-1000 ease-linear"
+                                />
+                            </svg>
+                            {/* Time Display */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="text-center">
+                                    <div className="text-5xl font-bold text-orange-400 mb-2">
+                                        {formatTime(timeLeft)}
+                                    </div>
+                                    <div className="text-lg text-gray-300 capitalize">
+                                        {timerMode === 'work' ? 'Work Time' : 
+                                         timerMode === 'shortBreak' ? 'Short Break' : 'Long Break'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mode Selection */}
+                    <div className="flex justify-center space-x-4 mb-8">
+                        <button
+                            onClick={() => switchMode('work')}
+                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                                timerMode === 'work'
+                                    ? 'bg-orange-600 text-white'
+                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                            }`}
+                        >
+                            Work
+                        </button>
+                        <button
+                            onClick={() => switchMode('shortBreak')}
+                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                                timerMode === 'shortBreak'
+                                    ? 'bg-orange-600 text-white'
+                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                            }`}
+                        >
+                            Short Break
+                        </button>
+                        <button
+                            onClick={() => switchMode('longBreak')}
+                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                                timerMode === 'longBreak'
+                                    ? 'bg-orange-600 text-white'
+                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                            }`}
+                        >
+                            Long Break
+                        </button>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="flex justify-center space-x-4 mb-8">
+                        {!isRunning ? (
+                            <button
+                                onClick={startTimer}
+                                className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
+                            >
+                                ▶️ Start
+                            </button>
+                        ) : (
+                            <button
+                                onClick={pauseTimer}
+                                className="px-8 py-4 bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-lg rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
+                            >
+                                ⏸️ Pause
+                            </button>
+                        )}
+                        <button
+                            onClick={resetTimer}
+                            className="px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
+                        >
+                            🔄 Reset
+                        </button>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="bg-gray-900 rounded-xl p-6">
+                        <h3 className="text-xl font-bold text-orange-300 mb-4 text-center">Session Stats</h3>
+                        <div className="grid grid-cols-2 gap-4 text-center">
+                            <div>
+                                <div className="text-2xl font-bold text-orange-400">{sessions}</div>
+                                <div className="text-sm text-gray-400">Work Sessions</div>
+                            </div>
+                            <div>
+                                <div className="text-2xl font-bold text-orange-400">
+                                    {Math.floor((timerSettings.work * sessions) / 60)}
+                                </div>
+                                <div className="text-sm text-gray-400">Minutes Focused</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Tips */}
+                    <div className="mt-6 bg-blue-900 rounded-xl p-4 border border-blue-700">
+                        <h4 className="font-semibold text-blue-300 mb-2">💡 Pomodoro Tips:</h4>
+                        <ul className="text-blue-200 text-sm space-y-1">
+                            <li>• Work for 25 minutes, then take a 5-minute break</li>
+                            <li>• After 4 work sessions, take a longer 15-minute break</li>
+                            <li>• Eliminate distractions during work sessions</li>
+                            <li>• Use breaks to stretch and refresh your mind</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const TrainingHub = () => {
+        const [selectedTraining, setSelectedTraining] = useState(null);
+
+        const trainingPrograms = [
+            {
+                id: 'focus',
+                title: 'Focus & Concentration',
+                description: 'Improve your ability to maintain attention and concentration',
+                duration: '4 weeks',
+                exercises: [
+                    'Mindful breathing exercises',
+                    'Attention span training',
+                    'Distraction elimination techniques',
+                    'Deep work protocols'
+                ],
+                icon: '🎯'
+            },
+            {
+                id: 'memory',
+                title: 'Memory Enhancement',
+                description: 'Boost your memory retention and recall abilities',
+                duration: '6 weeks',
+                exercises: [
+                    'Memory palace technique',
+                    'Spaced repetition practice',
+                    'Association methods',
+                    'Visual memory training'
+                ],
+                icon: '🧠'
+            },
+            {
+                id: 'creativity',
+                title: 'Creative Thinking',
+                description: 'Unlock your creative potential and innovative thinking',
+                duration: '4 weeks',
+                exercises: [
+                    'Divergent thinking exercises',
+                    'Creative problem solving',
+                    'Mind mapping techniques',
+                    'Idea generation methods'
+                ],
+                icon: '✨'
+            },
+            {
+                id: 'productivity',
+                title: 'Productivity Mastery',
+                description: 'Master time management and productivity systems',
+                duration: '8 weeks',
+                exercises: [
+                    'Time blocking strategies',
+                    'Task prioritization methods',
+                    'Energy management techniques',
+                    'Workflow optimization'
+                ],
+                icon: '⚡'
+            }
+        ];
+
+        return (
+            <div className="flex flex-col items-center p-8 bg-gradient-to-br from-gray-900 to-black min-h-screen text-gray-100">
+                <h1 className="text-4xl font-extrabold text-orange-400 mb-8 text-center leading-tight">
+                    Training Hub
+                </h1>
+                <p className="text-xl text-gray-300 mb-10 text-center max-w-3xl">
+                    Comprehensive training programs for cognitive enhancement and productivity.
+                </p>
+
+                <div className="bg-gray-800 rounded-2xl shadow-xl p-8 max-w-4xl w-full border-b-4 border-orange-700">
+                    {!selectedTraining ? (
+                        <div>
+                            <h2 className="text-3xl font-bold text-orange-400 mb-6 border-b pb-4 border-orange-800">
+                                Choose Your Training Program
+                            </h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {trainingPrograms.map(program => (
+                                    <div
+                                        key={program.id}
+                                        className="bg-gray-700 rounded-xl p-6 cursor-pointer hover:bg-gray-600 transition-all duration-200 border-l-4 border-orange-600"
+                                        onClick={() => setSelectedTraining(program)}
+                                    >
+                                        <div className="flex items-center mb-4">
+                                            <span className="text-3xl mr-3">{program.icon}</span>
+                                            <div>
+                                                <h3 className="text-xl font-bold text-orange-300">{program.title}</h3>
+                                                <p className="text-sm text-orange-400">{program.duration}</p>
+                                            </div>
+                                        </div>
+                                        <p className="text-gray-300 mb-4">{program.description}</p>
+                                        <button className="text-orange-400 hover:text-orange-300 font-semibold">
+                                            Start Training →
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <button
+                                onClick={() => setSelectedTraining(null)}
+                                className="mb-6 text-orange-400 hover:text-orange-300 font-semibold flex items-center"
+                            >
+                                ← Back to Programs
+                            </button>
+                            <div className="text-center mb-8">
+                                <span className="text-4xl mb-4 block">{selectedTraining.icon}</span>
+                                <h2 className="text-3xl font-bold text-orange-400 mb-2">{selectedTraining.title}</h2>
+                                <p className="text-gray-300 mb-2">{selectedTraining.description}</p>
+                                <span className="text-orange-400 font-semibold">{selectedTraining.duration}</span>
+                            </div>
+                            
+                            <div className="bg-gray-900 rounded-xl p-6">
+                                <h3 className="text-xl font-bold text-orange-300 mb-4">Training Exercises</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {selectedTraining.exercises.map((exercise, index) => (
+                                        <div key={index} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                                            <div className="flex items-center">
+                                                <span className="text-orange-400 font-bold mr-3">{index + 1}</span>
+                                                <span className="text-gray-200">{exercise}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mt-8 text-center">
+                                <button className="px-8 py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+                                    🚀 Start {selectedTraining.title} Program
+                                </button>
+                            </div>
+
+                            <div className="mt-6 bg-green-900 rounded-xl p-4 border border-green-700">
+                                <h4 className="font-semibold text-green-300 mb-2">💡 Training Tips:</h4>
+                                <ul className="text-green-200 text-sm space-y-1">
+                                    <li>• Practice exercises daily for best results</li>
+                                    <li>• Track your progress and improvements</li>
+                                    <li>• Combine with nootropics for enhanced effects</li>
+                                    <li>• Be patient - cognitive improvements take time</li>
+                                </ul>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // Main render with navigation
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black">
+            <style dangerouslySetInnerHTML={{ __html: sliderStyles }} />
+            <Navigation />
+            <div className="pt-16">
+                {view === 'nootropics' && (
+                    <div>
+                        {selectedGoal ? (
+                            selectedGoal === 'library' ? <SupplementLibrary /> : <RecommendationDisplay />
+                        ) : (
+                            <GoalSelection />
+                        )}
+                    </div>
+                )}
+                {view === 'binauralBeats' && <BinauralBeats />}
+                {view === 'pomodoro' && <PomodoroTimer />}
+                {view === 'training' && <TrainingHub />}
+            </div>
+            {showModal && selectedNootropicForModal && (
+                <NootropicModal
+                    nootropic={selectedNootropicForModal}
+                    onClose={() => setShowModal(false)}
+                />
+            )}
+        </div>
+    );
 };
 
-export default App;
+// Make App available globally for browser use
+window.App = App;
