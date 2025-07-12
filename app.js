@@ -1068,6 +1068,7 @@ const sliderStyles = `
         const [volume, setVolume] = useState(0.5);
         const [audioContext, setAudioContext] = useState(null);
         const [oscillators, setOscillators] = useState({ left: null, right: null });
+        const [gainNodes, setGainNodes] = useState({ left: null, right: null });
 
         const frequencyPresets = [
             { name: 'Deep Sleep', frequency: 0.5, description: 'Delta waves for deep restorative sleep' },
@@ -1081,74 +1082,143 @@ const sliderStyles = `
             { name: 'Insight', frequency: 40, description: 'Gamma waves for insight and peak performance' }
         ];
 
-        const startBinauralBeats = () => {
-            if (!audioContext) {
-                const newAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-                setAudioContext(newAudioContext);
+        const startBinauralBeats = async () => {
+            try {
+                // Create new audio context if it doesn't exist
+                if (!audioContext) {
+                    const newAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    setAudioContext(newAudioContext);
+                    
+                    // Resume context if it's suspended (browser autoplay policy)
+                    if (newAudioContext.state === 'suspended') {
+                        await newAudioContext.resume();
+                    }
+                }
+
+                // Stop any existing oscillators
+                if (oscillators.left && oscillators.right) {
+                    oscillators.left.stop();
+                    oscillators.right.stop();
+                }
+
+                const ctx = audioContext || new (window.AudioContext || window.webkitAudioContext)();
                 
-                const leftOsc = newAudioContext.createOscillator();
-                const rightOsc = newAudioContext.createOscillator();
-                const leftGain = newAudioContext.createGain();
-                const rightGain = newAudioContext.createGain();
-                const merger = newAudioContext.createChannelMerger(2);
-
-                // Set up left channel (base frequency)
-                leftOsc.frequency.setValueAtTime(200, newAudioContext.currentTime);
+                // Create oscillators
+                const leftOsc = ctx.createOscillator();
+                const rightOsc = ctx.createOscillator();
+                
+                // Create gain nodes for volume control
+                const leftGain = ctx.createGain();
+                const rightGain = ctx.createGain();
+                
+                // Create stereo panner for left and right channels
+                const leftPanner = ctx.createStereoPanner();
+                const rightPanner = ctx.createStereoPanner();
+                
+                // Set up left channel
+                leftOsc.frequency.setValueAtTime(200, ctx.currentTime);
                 leftOsc.connect(leftGain);
-                leftGain.connect(merger, 0, 0);
-                leftGain.gain.setValueAtTime(volume, newAudioContext.currentTime);
+                leftGain.connect(leftPanner);
+                leftPanner.pan.setValueAtTime(-1, ctx.currentTime); // Full left
+                leftPanner.connect(ctx.destination);
+                leftGain.gain.setValueAtTime(volume, ctx.currentTime);
 
-                // Set up right channel (base frequency + binaural frequency)
-                rightOsc.frequency.setValueAtTime(200 + currentFrequency, newAudioContext.currentTime);
+                // Set up right channel
+                rightOsc.frequency.setValueAtTime(200 + currentFrequency, ctx.currentTime);
                 rightOsc.connect(rightGain);
-                rightGain.connect(merger, 0, 1);
-                rightGain.gain.setValueAtTime(volume, newAudioContext.currentTime);
+                rightGain.connect(rightPanner);
+                rightPanner.pan.setValueAtTime(1, ctx.currentTime); // Full right
+                rightPanner.connect(ctx.destination);
+                rightGain.gain.setValueAtTime(volume, ctx.currentTime);
 
                 // Start oscillators
                 leftOsc.start();
                 rightOsc.start();
 
                 setOscillators({ left: leftOsc, right: rightOsc });
+                setGainNodes({ left: leftGain, right: rightGain });
                 setIsPlaying(true);
-            } else {
-                // Resume existing context
-                audioContext.resume();
-                setIsPlaying(true);
+                
+                console.log('Binaural beats started:', currentFrequency, 'Hz');
+            } catch (error) {
+                console.error('Error starting binaural beats:', error);
+                alert('Please allow audio playback and try again.');
             }
         };
 
         const stopBinauralBeats = () => {
-            if (audioContext) {
-                audioContext.suspend();
+            try {
+                if (oscillators.left && oscillators.right) {
+                    oscillators.left.stop();
+                    oscillators.right.stop();
+                    setOscillators({ left: null, right: null });
+                    setGainNodes({ left: null, right: null });
+                }
+                if (audioContext && audioContext.state === 'running') {
+                    audioContext.suspend();
+                }
                 setIsPlaying(false);
-            }
-            if (oscillators.left && oscillators.right) {
-                oscillators.left.stop();
-                oscillators.right.stop();
-                setOscillators({ left: null, right: null });
+                console.log('Binaural beats stopped');
+            } catch (error) {
+                console.error('Error stopping binaural beats:', error);
             }
         };
 
         const updateFrequency = (freq) => {
             setCurrentFrequency(freq);
-            if (isPlaying && oscillators.left && oscillators.right) {
-                oscillators.left.frequency.setValueAtTime(200, audioContext.currentTime);
-                oscillators.right.frequency.setValueAtTime(200 + freq, audioContext.currentTime);
+            if (isPlaying && oscillators.left && oscillators.right && audioContext) {
+                try {
+                    oscillators.left.frequency.setValueAtTime(200, audioContext.currentTime);
+                    oscillators.right.frequency.setValueAtTime(200 + freq, audioContext.currentTime);
+                    console.log('Frequency updated to:', freq, 'Hz');
+                } catch (error) {
+                    console.error('Error updating frequency:', error);
+                }
             }
         };
 
         const updateVolume = (vol) => {
             setVolume(vol);
-            if (isPlaying && oscillators.left && oscillators.right) {
-                // Note: We'd need to store gain nodes to update volume dynamically
-                // For simplicity, we'll restart with new volume
-                stopBinauralBeats();
-                setTimeout(() => startBinauralBeats(), 100);
+            if (isPlaying && gainNodes.left && gainNodes.right) {
+                try {
+                    gainNodes.left.gain.setValueAtTime(vol, audioContext.currentTime);
+                    gainNodes.right.gain.setValueAtTime(vol, audioContext.currentTime);
+                    console.log('Volume updated to:', vol);
+                } catch (error) {
+                    console.error('Error updating volume:', error);
+                }
+            }
+        };
+
+        // Cleanup on unmount
+        useEffect(() => {
+            return () => {
+                if (oscillators.left && oscillators.right) {
+                    oscillators.left.stop();
+                    oscillators.right.stop();
+                }
+                if (audioContext) {
+                    audioContext.close();
+                }
+            };
+        }, []);
+
+        const handleUserInteraction = async () => {
+            if (audioContext && audioContext.state === 'suspended') {
+                try {
+                    await audioContext.resume();
+                    console.log('Audio context resumed');
+                } catch (error) {
+                    console.error('Error resuming audio context:', error);
+                }
             }
         };
 
         return (
-            <div className="flex flex-col items-center p-8 bg-gradient-to-br from-gray-900 to-black min-h-screen text-gray-100">
+            <div 
+                className="flex flex-col items-center p-8 bg-gradient-to-br from-gray-900 to-black min-h-screen text-gray-100"
+                onClick={handleUserInteraction}
+            >
                 <h1 className="text-4xl font-extrabold text-orange-400 mb-8 text-center leading-tight">
                     Binaural Beats Generator
                 </h1>
@@ -1222,7 +1292,16 @@ const sliderStyles = `
                         </div>
                     </div>
 
-                    {/* Playback Controls */}
+                    {/* Status and Playback Controls */}
+                    <div className="text-center mb-6">
+                        <div className="inline-flex items-center space-x-2 px-4 py-2 bg-gray-700 rounded-lg">
+                            <div className={`w-3 h-3 rounded-full ${isPlaying ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
+                            <span className="text-gray-300">
+                                {isPlaying ? `Playing ${currentFrequency} Hz` : 'Ready to play'}
+                            </span>
+                        </div>
+                    </div>
+
                     <div className="flex justify-center space-x-4">
                         <button
                             onClick={isPlaying ? stopBinauralBeats : startBinauralBeats}
