@@ -1272,19 +1272,42 @@ const sliderStyles = `
         );
     };
 
-    // Placeholder components for future features
+    // Enhanced Pomodoro Timer with Task Management
     const PomodoroTimer = () => {
-        const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes in seconds
+        const [timeLeft, setTimeLeft] = useState(25 * 60);
         const [isRunning, setIsRunning] = useState(false);
         const [isBreak, setIsBreak] = useState(false);
         const [sessions, setSessions] = useState(0);
-        const [timerMode, setTimerMode] = useState('work'); // 'work', 'shortBreak', 'longBreak'
+        const [timerMode, setTimerMode] = useState('work');
+        const [tasks, setTasks] = useState([]);
+        const [newTask, setNewTask] = useState('');
+        const [currentTask, setCurrentTask] = useState(null);
+        const [showTaskModal, setShowTaskModal] = useState(false);
+        const [taskStats, setTaskStats] = useState({
+            completed: 0,
+            totalPomodoros: 0,
+            totalTime: 0
+        });
 
         const timerSettings = {
             work: 25 * 60,
             shortBreak: 5 * 60,
             longBreak: 15 * 60
         };
+
+        // Load tasks from localStorage
+        useEffect(() => {
+            const savedTasks = localStorage.getItem('pomodoroTasks');
+            const savedStats = localStorage.getItem('pomodoroStats');
+            if (savedTasks) setTasks(JSON.parse(savedTasks));
+            if (savedStats) setTaskStats(JSON.parse(savedStats));
+        }, []);
+
+        // Save tasks to localStorage
+        useEffect(() => {
+            localStorage.setItem('pomodoroTasks', JSON.stringify(tasks));
+            localStorage.setItem('pomodoroStats', JSON.stringify(taskStats));
+        }, [tasks, taskStats]);
 
         useEffect(() => {
             let interval = null;
@@ -1294,6 +1317,7 @@ const sliderStyles = `
                 }, 1000);
             } else if (timeLeft === 0) {
                 setIsRunning(false);
+                
                 // Play notification sound
                 if ('Notification' in window && Notification.permission === 'granted') {
                     new Notification('Pomodoro Timer', {
@@ -1301,6 +1325,22 @@ const sliderStyles = `
                         icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ea580c"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
                     });
                 }
+
+                // Update task progress when work session completes
+                if (!isBreak && currentTask) {
+                    const updatedTasks = tasks.map(task => 
+                        task.id === currentTask.id 
+                            ? { ...task, completedPomodoros: task.completedPomodoros + 1 }
+                            : task
+                    );
+                    setTasks(updatedTasks);
+                    setTaskStats(prev => ({
+                        ...prev,
+                        totalPomodoros: prev.totalPomodoros + 1,
+                        totalTime: prev.totalTime + timerSettings.work
+                    }));
+                }
+
                 // Auto-switch to next mode
                 if (!isBreak) {
                     setSessions(sessions + 1);
@@ -1319,11 +1359,56 @@ const sliderStyles = `
                 }
             }
             return () => clearInterval(interval);
-        }, [isRunning, timeLeft, isBreak, sessions, timerMode]);
+        }, [isRunning, timeLeft, isBreak, sessions, timerMode, currentTask, tasks]);
+
+        const addTask = () => {
+            if (newTask.trim()) {
+                const task = {
+                    id: Date.now(),
+                    title: newTask.trim(),
+                    description: '',
+                    priority: 'medium',
+                    completedPomodoros: 0,
+                    estimatedPomodoros: 1,
+                    completed: false,
+                    createdAt: new Date().toISOString(),
+                    category: 'work'
+                };
+                setTasks([...tasks, task]);
+                setNewTask('');
+            }
+        };
+
+        const deleteTask = (taskId) => {
+            setTasks(tasks.filter(task => task.id !== taskId));
+            if (currentTask && currentTask.id === taskId) {
+                setCurrentTask(null);
+            }
+        };
+
+        const completeTask = (taskId) => {
+            const updatedTasks = tasks.map(task => 
+                task.id === taskId 
+                    ? { ...task, completed: true, completedAt: new Date().toISOString() }
+                    : task
+            );
+            setTasks(updatedTasks);
+            setTaskStats(prev => ({
+                ...prev,
+                completed: prev.completed + 1
+            }));
+        };
+
+        const startTask = (task) => {
+            setCurrentTask(task);
+            setTimerMode('work');
+            setTimeLeft(timerSettings.work);
+            setIsBreak(false);
+            setIsRunning(false);
+        };
 
         const startTimer = () => {
             setIsRunning(true);
-            // Request notification permission
             if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
             }
@@ -1356,144 +1441,394 @@ const sliderStyles = `
             return ((total - timeLeft) / total) * 100;
         };
 
+        const getPriorityColor = (priority) => {
+            switch (priority) {
+                case 'high': return 'text-red-400';
+                case 'medium': return 'text-yellow-400';
+                case 'low': return 'text-green-400';
+                default: return 'text-gray-400';
+            }
+        };
+
+        const getPriorityIcon = (priority) => {
+            switch (priority) {
+                case 'high': return '🔴';
+                case 'medium': return '🟡';
+                case 'low': return '🟢';
+                default: return '⚪';
+            }
+        };
+
+        const TaskModal = ({ task, onClose, onSave }) => {
+            const [editedTask, setEditedTask] = useState(task);
+
+            const handleSave = () => {
+                const updatedTasks = tasks.map(t => 
+                    t.id === task.id ? editedTask : t
+                );
+                setTasks(updatedTasks);
+                onSave();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4">
+                        <h3 className="text-xl font-bold text-orange-400 mb-4">Edit Task</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Title</label>
+                                <input
+                                    type="text"
+                                    value={editedTask.title}
+                                    onChange={(e) => setEditedTask({...editedTask, title: e.target.value})}
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-orange-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                                <textarea
+                                    value={editedTask.description}
+                                    onChange={(e) => setEditedTask({...editedTask, description: e.target.value})}
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-orange-500"
+                                    rows="3"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Priority</label>
+                                <select
+                                    value={editedTask.priority}
+                                    onChange={(e) => setEditedTask({...editedTask, priority: e.target.value})}
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-orange-500"
+                                >
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Estimated Pomodoros</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={editedTask.estimatedPomodoros}
+                                    onChange={(e) => setEditedTask({...editedTask, estimatedPomodoros: parseInt(e.target.value) || 1})}
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-orange-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex space-x-3 mt-6">
+                            <button
+                                onClick={handleSave}
+                                className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium"
+                            >
+                                Save
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         return (
             <div className="flex flex-col items-center p-8 bg-gradient-to-br from-gray-900 to-black min-h-screen text-gray-100">
                 <h1 className="text-4xl font-extrabold text-orange-400 mb-8 text-center leading-tight">
-                    Pomodoro Timer
+                    Pomodoro Timer & Task Manager
                 </h1>
                 <p className="text-xl text-gray-300 mb-10 text-center max-w-3xl">
-                    Master the art of focused work with timed productivity sessions.
+                    Master focused work with timed sessions and intelligent task management.
                 </p>
 
-                <div className="bg-gray-800 rounded-2xl shadow-xl p-8 max-w-2xl w-full border-b-4 border-orange-700">
-                    {/* Timer Display */}
-                    <div className="text-center mb-8">
-                        <div className="relative w-64 h-64 mx-auto mb-6">
-                            {/* Progress Circle */}
-                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                                <circle
-                                    cx="50"
-                                    cy="50"
-                                    r="45"
-                                    fill="none"
-                                    stroke="#374151"
-                                    strokeWidth="8"
-                                />
-                                <circle
-                                    cx="50"
-                                    cy="50"
-                                    r="45"
-                                    fill="none"
-                                    stroke="#ea580c"
-                                    strokeWidth="8"
-                                    strokeDasharray={`${2 * Math.PI * 45}`}
-                                    strokeDashoffset={`${2 * Math.PI * 45 * (1 - getProgress() / 100)}`}
-                                    strokeLinecap="round"
-                                    className="transition-all duration-1000 ease-linear"
-                                />
-                            </svg>
-                            {/* Time Display */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="text-center">
-                                    <div className="text-5xl font-bold text-orange-400 mb-2">
-                                        {formatTime(timeLeft)}
-                                    </div>
-                                    <div className="text-lg text-gray-300 capitalize">
-                                        {timerMode === 'work' ? 'Work Time' : 
-                                         timerMode === 'shortBreak' ? 'Short Break' : 'Long Break'}
-                                    </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl w-full">
+                    {/* Timer Section */}
+                    <div className="bg-gray-800 rounded-2xl shadow-xl p-8 border-b-4 border-orange-700">
+                        {/* Current Task Display */}
+                        {currentTask && (
+                            <div className="mb-6 p-4 bg-orange-900 rounded-lg border border-orange-700">
+                                <h3 className="text-lg font-semibold text-orange-300 mb-2">Current Task:</h3>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-orange-200">{currentTask.title}</span>
+                                    <button
+                                        onClick={() => setCurrentTask(null)}
+                                        className="text-orange-400 hover:text-orange-300"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                                <div className="text-sm text-orange-300 mt-2">
+                                    {currentTask.completedPomodoros}/{currentTask.estimatedPomodoros} pomodoros
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Mode Selection */}
-                    <div className="flex justify-center space-x-4 mb-8">
-                        <button
-                            onClick={() => switchMode('work')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                                timerMode === 'work'
-                                    ? 'bg-orange-600 text-white'
-                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                            }`}
-                        >
-                            Work
-                        </button>
-                        <button
-                            onClick={() => switchMode('shortBreak')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                                timerMode === 'shortBreak'
-                                    ? 'bg-orange-600 text-white'
-                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                            }`}
-                        >
-                            Short Break
-                        </button>
-                        <button
-                            onClick={() => switchMode('longBreak')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                                timerMode === 'longBreak'
-                                    ? 'bg-orange-600 text-white'
-                                    : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                            }`}
-                        >
-                            Long Break
-                        </button>
-                    </div>
-
-                    {/* Controls */}
-                    <div className="flex justify-center space-x-4 mb-8">
-                        {!isRunning ? (
-                            <button
-                                onClick={startTimer}
-                                className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
-                            >
-                                ▶️ Start
-                            </button>
-                        ) : (
-                            <button
-                                onClick={pauseTimer}
-                                className="px-8 py-4 bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-lg rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
-                            >
-                                ⏸️ Pause
-                            </button>
                         )}
-                        <button
-                            onClick={resetTimer}
-                            className="px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
-                        >
-                            🔄 Reset
-                        </button>
-                    </div>
 
-                    {/* Stats */}
-                    <div className="bg-gray-900 rounded-xl p-6">
-                        <h3 className="text-xl font-bold text-orange-300 mb-4 text-center">Session Stats</h3>
-                        <div className="grid grid-cols-2 gap-4 text-center">
-                            <div>
-                                <div className="text-2xl font-bold text-orange-400">{sessions}</div>
-                                <div className="text-sm text-gray-400">Work Sessions</div>
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-orange-400">
-                                    {Math.floor((timerSettings.work * sessions) / 60)}
+                        {/* Timer Display */}
+                        <div className="text-center mb-8">
+                            <div className="relative w-48 h-48 mx-auto mb-6">
+                                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                                    <circle
+                                        cx="50"
+                                        cy="50"
+                                        r="40"
+                                        fill="none"
+                                        stroke="#374151"
+                                        strokeWidth="6"
+                                    />
+                                    <circle
+                                        cx="50"
+                                        cy="50"
+                                        r="40"
+                                        fill="none"
+                                        stroke="#ea580c"
+                                        strokeWidth="6"
+                                        strokeDasharray={`${2 * Math.PI * 40}`}
+                                        strokeDashoffset={`${2 * Math.PI * 40 * (1 - getProgress() / 100)}`}
+                                        strokeLinecap="round"
+                                        className="transition-all duration-1000 ease-linear"
+                                    />
+                                </svg>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="text-center">
+                                        <div className="text-4xl font-bold text-orange-400 mb-2">
+                                            {formatTime(timeLeft)}
+                                        </div>
+                                        <div className="text-sm text-gray-300 capitalize">
+                                            {timerMode === 'work' ? 'Work Time' : 
+                                             timerMode === 'shortBreak' ? 'Short Break' : 'Long Break'}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="text-sm text-gray-400">Minutes Focused</div>
+                            </div>
+                        </div>
+
+                        {/* Mode Selection */}
+                        <div className="flex justify-center space-x-2 mb-6">
+                            <button
+                                onClick={() => switchMode('work')}
+                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                    timerMode === 'work'
+                                        ? 'bg-orange-600 text-white'
+                                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                                }`}
+                            >
+                                Work
+                            </button>
+                            <button
+                                onClick={() => switchMode('shortBreak')}
+                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                    timerMode === 'shortBreak'
+                                        ? 'bg-orange-600 text-white'
+                                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                                }`}
+                            >
+                                Short Break
+                            </button>
+                            <button
+                                onClick={() => switchMode('longBreak')}
+                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                    timerMode === 'longBreak'
+                                        ? 'bg-orange-600 text-white'
+                                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                                }`}
+                            >
+                                Long Break
+                            </button>
+                        </div>
+
+                        {/* Controls */}
+                        <div className="flex justify-center space-x-4 mb-6">
+                            {!isRunning ? (
+                                <button
+                                    onClick={startTimer}
+                                    className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
+                                >
+                                    ▶️ Start
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={pauseTimer}
+                                    className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
+                                >
+                                    ⏸️ Pause
+                                </button>
+                            )}
+                            <button
+                                onClick={resetTimer}
+                                className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-full shadow-lg transition-all duration-300 transform hover:scale-105"
+                            >
+                                🔄 Reset
+                            </button>
+                        </div>
+
+                        {/* Stats */}
+                        <div className="bg-gray-900 rounded-xl p-4">
+                            <h3 className="text-lg font-bold text-orange-300 mb-3 text-center">Today's Stats</h3>
+                            <div className="grid grid-cols-2 gap-4 text-center">
+                                <div>
+                                    <div className="text-xl font-bold text-orange-400">{sessions}</div>
+                                    <div className="text-xs text-gray-400">Work Sessions</div>
+                                </div>
+                                <div>
+                                    <div className="text-xl font-bold text-orange-400">
+                                        {Math.floor((timerSettings.work * sessions) / 60)}
+                                    </div>
+                                    <div className="text-xs text-gray-400">Minutes Focused</div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Tips */}
-                    <div className="mt-6 bg-blue-900 rounded-xl p-4 border border-blue-700">
-                        <h4 className="font-semibold text-blue-300 mb-2">💡 Pomodoro Tips:</h4>
-                        <ul className="text-blue-200 text-sm space-y-1">
-                            <li>• Work for 25 minutes, then take a 5-minute break</li>
-                            <li>• After 4 work sessions, take a longer 15-minute break</li>
-                            <li>• Eliminate distractions during work sessions</li>
-                            <li>• Use breaks to stretch and refresh your mind</li>
-                        </ul>
+                    {/* Task Management Section */}
+                    <div className="bg-gray-800 rounded-2xl shadow-xl p-8 border-b-4 border-blue-700">
+                        <h2 className="text-2xl font-bold text-blue-400 mb-6">Task Management</h2>
+                        
+                        {/* Add Task */}
+                        <div className="mb-6">
+                            <div className="flex space-x-2">
+                                <input
+                                    type="text"
+                                    value={newTask}
+                                    onChange={(e) => setNewTask(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && addTask()}
+                                    placeholder="Add a new task..."
+                                    className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                                />
+                                <button
+                                    onClick={addTask}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Task List */}
+                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                            {tasks.filter(task => !task.completed).map(task => (
+                                <div
+                                    key={task.id}
+                                    className={`p-4 rounded-lg border-l-4 ${
+                                        currentTask?.id === task.id 
+                                            ? 'bg-blue-900 border-blue-500' 
+                                            : 'bg-gray-700 border-gray-600'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center space-x-2">
+                                            <span className={getPriorityColor(task.priority)}>
+                                                {getPriorityIcon(task.priority)}
+                                            </span>
+                                            <h3 className={`font-medium ${task.completed ? 'line-through text-gray-400' : 'text-white'}`}>
+                                                {task.title}
+                                            </h3>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-sm text-gray-400">
+                                                {task.completedPomodoros}/{task.estimatedPomodoros}
+                                            </span>
+                                            <button
+                                                onClick={() => startTask(task)}
+                                                className="text-blue-400 hover:text-blue-300 text-sm"
+                                            >
+                                                ▶️
+                                            </button>
+                                            <button
+                                                onClick={() => setShowTaskModal(task)}
+                                                className="text-gray-400 hover:text-gray-300 text-sm"
+                                            >
+                                                ✏️
+                                            </button>
+                                            <button
+                                                onClick={() => completeTask(task.id)}
+                                                className="text-green-400 hover:text-green-300 text-sm"
+                                            >
+                                                ✓
+                                            </button>
+                                            <button
+                                                onClick={() => deleteTask(task.id)}
+                                                className="text-red-400 hover:text-red-300 text-sm"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {task.description && (
+                                        <p className="text-sm text-gray-400 mb-2">{task.description}</p>
+                                    )}
+                                    <div className="flex items-center justify-between text-xs text-gray-500">
+                                        <span>Created: {new Date(task.createdAt).toLocaleDateString()}</span>
+                                        <span>Priority: {task.priority}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Completed Tasks */}
+                        {tasks.filter(task => task.completed).length > 0 && (
+                            <div className="mt-6">
+                                <h3 className="text-lg font-semibold text-green-400 mb-3">Completed Tasks</h3>
+                                <div className="space-y-2 max-h-32 overflow-y-auto">
+                                    {tasks.filter(task => task.completed).map(task => (
+                                        <div key={task.id} className="p-3 bg-gray-700 rounded-lg opacity-75">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-gray-300 line-through">{task.title}</span>
+                                                <span className="text-xs text-gray-500">
+                                                    {task.completedPomodoros} pomodoros
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Task Stats */}
+                        <div className="mt-6 bg-gray-900 rounded-xl p-4">
+                            <h3 className="text-lg font-bold text-blue-300 mb-3 text-center">Task Statistics</h3>
+                            <div className="grid grid-cols-3 gap-4 text-center">
+                                <div>
+                                    <div className="text-xl font-bold text-blue-400">{taskStats.completed}</div>
+                                    <div className="text-xs text-gray-400">Completed</div>
+                                </div>
+                                <div>
+                                    <div className="text-xl font-bold text-blue-400">{taskStats.totalPomodoros}</div>
+                                    <div className="text-xs text-gray-400">Total Pomodoros</div>
+                                </div>
+                                <div>
+                                    <div className="text-xl font-bold text-blue-400">
+                                        {Math.floor(taskStats.totalTime / 60)}
+                                    </div>
+                                    <div className="text-xs text-gray-400">Minutes</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                {/* Tips */}
+                <div className="mt-8 bg-blue-900 rounded-xl p-4 border border-blue-700 max-w-4xl w-full">
+                    <h4 className="font-semibold text-blue-300 mb-2">💡 Enhanced Pomodoro Tips:</h4>
+                    <ul className="text-blue-200 text-sm space-y-1">
+                        <li>• Break large tasks into smaller, manageable pomodoros</li>
+                        <li>• Use task priority to focus on what matters most</li>
+                        <li>• Track your progress to build momentum and motivation</li>
+                        <li>• Take breaks to maintain mental clarity and prevent burnout</li>
+                        <li>• Review completed tasks to celebrate your progress</li>
+                    </ul>
+                </div>
+
+                {/* Task Modal */}
+                {showTaskModal && (
+                    <TaskModal
+                        task={showTaskModal}
+                        onClose={() => setShowTaskModal(false)}
+                        onSave={() => setShowTaskModal(false)}
+                    />
+                )}
             </div>
         );
     };
