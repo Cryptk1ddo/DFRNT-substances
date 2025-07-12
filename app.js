@@ -1272,7 +1272,7 @@ const sliderStyles = `
         );
     };
 
-    // Enhanced Pomodoro Timer with Task Management
+    // Enhanced Pomodoro Timer with Team Collaboration & Task Management
     const PomodoroTimer = () => {
         const [timeLeft, setTimeLeft] = useState(25 * 60);
         const [isRunning, setIsRunning] = useState(false);
@@ -1288,6 +1288,20 @@ const sliderStyles = `
             totalPomodoros: 0,
             totalTime: 0
         });
+        
+        // Team Collaboration Features
+        const [isTeamMode, setIsTeamMode] = useState(false);
+        const [teamCode, setTeamCode] = useState('');
+        const [teamMembers, setTeamMembers] = useState([]);
+        const [sharedTasks, setSharedTasks] = useState([]);
+        const [teamStats, setTeamStats] = useState({});
+        const [showTeamModal, setShowTeamModal] = useState(false);
+        const [userProfile, setUserProfile] = useState({
+            id: Date.now(),
+            name: 'Anonymous User',
+            avatar: '👤',
+            color: '#ea580c'
+        });
 
         const timerSettings = {
             work: 25 * 60,
@@ -1295,19 +1309,41 @@ const sliderStyles = `
             longBreak: 15 * 60
         };
 
-        // Load tasks from localStorage
+        // Load data from localStorage
         useEffect(() => {
             const savedTasks = localStorage.getItem('pomodoroTasks');
             const savedStats = localStorage.getItem('pomodoroStats');
+            const savedTeamData = localStorage.getItem('pomodoroTeamData');
+            const savedUserProfile = localStorage.getItem('pomodoroUserProfile');
+            
             if (savedTasks) setTasks(JSON.parse(savedTasks));
             if (savedStats) setTaskStats(JSON.parse(savedStats));
+            if (savedTeamData) {
+                const teamData = JSON.parse(savedTeamData);
+                setTeamMembers(teamData.members || []);
+                setSharedTasks(teamData.tasks || []);
+                setTeamStats(teamData.stats || {});
+                setIsTeamMode(teamData.isTeamMode || false);
+                setTeamCode(teamData.teamCode || '');
+            }
+            if (savedUserProfile) setUserProfile(JSON.parse(savedUserProfile));
         }, []);
 
-        // Save tasks to localStorage
+        // Save data to localStorage
         useEffect(() => {
             localStorage.setItem('pomodoroTasks', JSON.stringify(tasks));
             localStorage.setItem('pomodoroStats', JSON.stringify(taskStats));
-        }, [tasks, taskStats]);
+            localStorage.setItem('pomodoroUserProfile', JSON.stringify(userProfile));
+            
+            const teamData = {
+                members: teamMembers,
+                tasks: sharedTasks,
+                stats: teamStats,
+                isTeamMode,
+                teamCode
+            };
+            localStorage.setItem('pomodoroTeamData', JSON.stringify(teamData));
+        }, [tasks, taskStats, teamMembers, sharedTasks, teamStats, isTeamMode, teamCode, userProfile]);
 
         useEffect(() => {
             let interval = null;
@@ -1459,6 +1495,93 @@ const sliderStyles = `
             }
         };
 
+        // Team Collaboration Functions
+        const generateTeamCode = () => {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        };
+
+        const createTeam = () => {
+            const newTeamCode = generateTeamCode();
+            setTeamCode(newTeamCode);
+            setIsTeamMode(true);
+            setTeamMembers([userProfile]);
+            setShowTeamModal(false);
+        };
+
+        const joinTeam = (code) => {
+            if (code.trim()) {
+                setTeamCode(code.trim().toUpperCase());
+                setIsTeamMode(true);
+                // Simulate joining existing team
+                const mockTeamMembers = [
+                    { id: 1, name: 'Team Leader', avatar: '👨‍💼', color: '#3b82f6', pomodoros: 12, tasks: 8 },
+                    { id: 2, name: 'Designer', avatar: '🎨', color: '#8b5cf6', pomodoros: 9, tasks: 6 },
+                    { id: 3, name: 'Developer', avatar: '👨‍💻', color: '#10b981', pomodoros: 15, tasks: 10 },
+                    userProfile
+                ];
+                setTeamMembers(mockTeamMembers);
+                setShowTeamModal(false);
+            }
+        };
+
+        const leaveTeam = () => {
+            setIsTeamMode(false);
+            setTeamCode('');
+            setTeamMembers([]);
+            setSharedTasks([]);
+            setTeamStats({});
+        };
+
+        const addSharedTask = () => {
+            if (newTask.trim()) {
+                const task = {
+                    id: Date.now(),
+                    title: newTask.trim(),
+                    description: '',
+                    priority: 'medium',
+                    completedPomodoros: 0,
+                    estimatedPomodoros: 1,
+                    completed: false,
+                    createdAt: new Date().toISOString(),
+                    category: 'work',
+                    assignedTo: userProfile.id,
+                    createdBy: userProfile.id
+                };
+                setSharedTasks([...sharedTasks, task]);
+                setNewTask('');
+            }
+        };
+
+        const completeSharedTask = (taskId) => {
+            const updatedTasks = sharedTasks.map(task => 
+                task.id === taskId 
+                    ? { ...task, completed: true, completedAt: new Date().toISOString() }
+                    : task
+            );
+            setSharedTasks(updatedTasks);
+            
+            // Update team stats
+            setTeamStats(prev => ({
+                ...prev,
+                [userProfile.id]: {
+                    ...prev[userProfile.id],
+                    completed: (prev[userProfile.id]?.completed || 0) + 1,
+                    pomodoros: (prev[userProfile.id]?.pomodoros || 0) + 1
+                }
+            }));
+        };
+
+        const getTeamLeaderboard = () => {
+            return teamMembers
+                .map(member => ({
+                    ...member,
+                    pomodoros: teamStats[member.id]?.pomodoros || 0,
+                    completed: teamStats[member.id]?.completed || 0,
+                    score: (teamStats[member.id]?.pomodoros || 0) * 10 + (teamStats[member.id]?.completed || 0) * 50
+                }))
+                .sort((a, b) => b.score - a.score);
+        };
+
         const TaskModal = ({ task, onClose, onSave }) => {
             const [editedTask, setEditedTask] = useState(task);
 
@@ -1535,14 +1658,150 @@ const sliderStyles = `
             );
         };
 
+        const TeamModal = ({ onClose }) => {
+            const [joinCode, setJoinCode] = useState('');
+            const [userName, setUserName] = useState(userProfile.name);
+            const [userAvatar, setUserAvatar] = useState(userProfile.avatar);
+
+            const avatars = ['👤', '👨‍💼', '👩‍💼', '👨‍💻', '👩‍💻', '🎨', '🔬', '📚', '🚀', '⭐'];
+
+            const handleCreateTeam = () => {
+                if (userName.trim()) {
+                    setUserProfile({
+                        ...userProfile,
+                        name: userName.trim(),
+                        avatar: userAvatar
+                    });
+                    createTeam();
+                }
+            };
+
+            const handleJoinTeam = () => {
+                if (userName.trim() && joinCode.trim()) {
+                    setUserProfile({
+                        ...userProfile,
+                        name: userName.trim(),
+                        avatar: userAvatar
+                    });
+                    joinTeam(joinCode);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-gray-800 rounded-xl p-8 max-w-md w-full mx-4">
+                        <h3 className="text-2xl font-bold text-blue-400 mb-6 text-center">Team Collaboration</h3>
+                        
+                        {/* User Profile Setup */}
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Your Name</label>
+                            <input
+                                type="text"
+                                value={userName}
+                                onChange={(e) => setUserName(e.target.value)}
+                                placeholder="Enter your name"
+                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                            />
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Choose Avatar</label>
+                            <div className="grid grid-cols-5 gap-2">
+                                {avatars.map((avatar, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => setUserAvatar(avatar)}
+                                        className={`p-2 rounded-lg text-2xl ${
+                                            userAvatar === avatar 
+                                                ? 'bg-blue-600 border-2 border-blue-400' 
+                                                : 'bg-gray-700 hover:bg-gray-600'
+                                        }`}
+                                    >
+                                        {avatar}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Create Team */}
+                        <div className="mb-6 p-4 bg-blue-900 rounded-lg border border-blue-700">
+                            <h4 className="font-semibold text-blue-300 mb-3">Create New Team</h4>
+                            <p className="text-blue-200 text-sm mb-3">Start a new team and invite others to join</p>
+                            <button
+                                onClick={handleCreateTeam}
+                                disabled={!userName.trim()}
+                                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-medium"
+                            >
+                                Create Team
+                            </button>
+                        </div>
+
+                        {/* Join Team */}
+                        <div className="mb-6 p-4 bg-green-900 rounded-lg border border-green-700">
+                            <h4 className="font-semibold text-green-300 mb-3">Join Existing Team</h4>
+                            <p className="text-green-200 text-sm mb-3">Enter the team code to join</p>
+                            <input
+                                type="text"
+                                value={joinCode}
+                                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                                placeholder="Enter team code"
+                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500 mb-3"
+                            />
+                            <button
+                                onClick={handleJoinTeam}
+                                disabled={!userName.trim() || !joinCode.trim()}
+                                className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-medium"
+                            >
+                                Join Team
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={onClose}
+                            className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
         return (
             <div className="flex flex-col items-center p-8 bg-gradient-to-br from-gray-900 to-black min-h-screen text-gray-100">
-                <h1 className="text-4xl font-extrabold text-orange-400 mb-8 text-center leading-tight">
+                <h1 className="text-4xl font-extrabold text-orange-400 mb-4 text-center leading-tight">
                     Pomodoro Timer & Task Manager
                 </h1>
-                <p className="text-xl text-gray-300 mb-10 text-center max-w-3xl">
+                <p className="text-xl text-gray-300 mb-6 text-center max-w-3xl">
                     Master focused work with timed sessions and intelligent task management.
                 </p>
+
+                {/* Team Collaboration Controls */}
+                <div className="mb-8 flex items-center space-x-4">
+                    {!isTeamMode ? (
+                        <button
+                            onClick={() => setShowTeamModal(true)}
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105"
+                        >
+                            👥 Join Team Session
+                        </button>
+                    ) : (
+                        <div className="flex items-center space-x-4">
+                            <div className="px-4 py-2 bg-blue-900 rounded-lg border border-blue-700">
+                                <span className="text-blue-300 font-medium">Team: {teamCode}</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <span className="text-gray-300">{userProfile.avatar} {userProfile.name}</span>
+                            </div>
+                            <button
+                                onClick={leaveTeam}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium"
+                            >
+                                Leave Team
+                            </button>
+                        </div>
+                    )}
+                </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl w-full">
                     {/* Timer Section */}
@@ -1684,7 +1943,9 @@ const sliderStyles = `
 
                     {/* Task Management Section */}
                     <div className="bg-gray-800 rounded-2xl shadow-xl p-8 border-b-4 border-blue-700">
-                        <h2 className="text-2xl font-bold text-blue-400 mb-6">Task Management</h2>
+                        <h2 className="text-2xl font-bold text-blue-400 mb-6">
+                            {isTeamMode ? 'Team Task Management' : 'Task Management'}
+                        </h2>
                         
                         {/* Add Task */}
                         <div className="mb-6">
@@ -1693,12 +1954,12 @@ const sliderStyles = `
                                     type="text"
                                     value={newTask}
                                     onChange={(e) => setNewTask(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && addTask()}
-                                    placeholder="Add a new task..."
+                                    onKeyPress={(e) => e.key === 'Enter' && (isTeamMode ? addSharedTask() : addTask())}
+                                    placeholder={isTeamMode ? "Add a team task..." : "Add a new task..."}
                                     className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
                                 />
                                 <button
-                                    onClick={addTask}
+                                    onClick={isTeamMode ? addSharedTask : addTask}
                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
                                 >
                                     Add
@@ -1706,9 +1967,36 @@ const sliderStyles = `
                             </div>
                         </div>
 
+                        {/* Team Leaderboard */}
+                        {isTeamMode && (
+                            <div className="mb-6 bg-purple-900 rounded-xl p-4 border border-purple-700">
+                                <h3 className="text-lg font-bold text-purple-300 mb-3 text-center">🏆 Team Leaderboard</h3>
+                                <div className="space-y-2">
+                                    {getTeamLeaderboard().map((member, index) => (
+                                        <div key={member.id} className="flex items-center justify-between p-2 bg-purple-800 rounded-lg">
+                                            <div className="flex items-center space-x-3">
+                                                <span className="text-lg">{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}</span>
+                                                <span className="text-2xl">{member.avatar}</span>
+                                                <div>
+                                                    <div className="font-medium text-purple-200">{member.name}</div>
+                                                    <div className="text-xs text-purple-300">
+                                                        {member.pomodoros} pomodoros • {member.completed} tasks
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="font-bold text-purple-300">{member.score}</div>
+                                                <div className="text-xs text-purple-400">points</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Task List */}
-                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                            {tasks.filter(task => !task.completed).map(task => (
+                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                            {(isTeamMode ? sharedTasks : tasks).filter(task => !task.completed).map(task => (
                                 <div
                                     key={task.id}
                                     className={`p-4 rounded-lg border-l-4 ${
@@ -1725,6 +2013,11 @@ const sliderStyles = `
                                             <h3 className={`font-medium ${task.completed ? 'line-through text-gray-400' : 'text-white'}`}>
                                                 {task.title}
                                             </h3>
+                                            {isTeamMode && task.assignedTo && (
+                                                <span className="text-xs text-gray-400">
+                                                    {teamMembers.find(m => m.id === task.assignedTo)?.avatar || '👤'}
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="flex items-center space-x-2">
                                             <span className="text-sm text-gray-400">
@@ -1736,24 +2029,28 @@ const sliderStyles = `
                                             >
                                                 ▶️
                                             </button>
+                                            {!isTeamMode && (
+                                                <button
+                                                    onClick={() => setShowTaskModal(task)}
+                                                    className="text-gray-400 hover:text-gray-300 text-sm"
+                                                >
+                                                    ✏️
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={() => setShowTaskModal(task)}
-                                                className="text-gray-400 hover:text-gray-300 text-sm"
-                                            >
-                                                ✏️
-                                            </button>
-                                            <button
-                                                onClick={() => completeTask(task.id)}
+                                                onClick={() => isTeamMode ? completeSharedTask(task.id) : completeTask(task.id)}
                                                 className="text-green-400 hover:text-green-300 text-sm"
                                             >
                                                 ✓
                                             </button>
-                                            <button
-                                                onClick={() => deleteTask(task.id)}
-                                                className="text-red-400 hover:text-red-300 text-sm"
-                                            >
-                                                🗑️
-                                            </button>
+                                            {!isTeamMode && (
+                                                <button
+                                                    onClick={() => deleteTask(task.id)}
+                                                    className="text-red-400 hover:text-red-300 text-sm"
+                                                >
+                                                    🗑️
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                     {task.description && (
@@ -1768,11 +2065,11 @@ const sliderStyles = `
                         </div>
 
                         {/* Completed Tasks */}
-                        {tasks.filter(task => task.completed).length > 0 && (
+                        {(isTeamMode ? sharedTasks : tasks).filter(task => task.completed).length > 0 && (
                             <div className="mt-6">
                                 <h3 className="text-lg font-semibold text-green-400 mb-3">Completed Tasks</h3>
-                                <div className="space-y-2 max-h-32 overflow-y-auto">
-                                    {tasks.filter(task => task.completed).map(task => (
+                                <div className="space-y-2 max-h-24 overflow-y-auto">
+                                    {(isTeamMode ? sharedTasks : tasks).filter(task => task.completed).map(task => (
                                         <div key={task.id} className="p-3 bg-gray-700 rounded-lg opacity-75">
                                             <div className="flex items-center justify-between">
                                                 <span className="text-gray-300 line-through">{task.title}</span>
@@ -1788,19 +2085,25 @@ const sliderStyles = `
 
                         {/* Task Stats */}
                         <div className="mt-6 bg-gray-900 rounded-xl p-4">
-                            <h3 className="text-lg font-bold text-blue-300 mb-3 text-center">Task Statistics</h3>
+                            <h3 className="text-lg font-bold text-blue-300 mb-3 text-center">
+                                {isTeamMode ? 'Team Statistics' : 'Task Statistics'}
+                            </h3>
                             <div className="grid grid-cols-3 gap-4 text-center">
                                 <div>
-                                    <div className="text-xl font-bold text-blue-400">{taskStats.completed}</div>
+                                    <div className="text-xl font-bold text-blue-400">
+                                        {isTeamMode ? Object.values(teamStats).reduce((sum, stat) => sum + (stat.completed || 0), 0) : taskStats.completed}
+                                    </div>
                                     <div className="text-xs text-gray-400">Completed</div>
                                 </div>
                                 <div>
-                                    <div className="text-xl font-bold text-blue-400">{taskStats.totalPomodoros}</div>
+                                    <div className="text-xl font-bold text-blue-400">
+                                        {isTeamMode ? Object.values(teamStats).reduce((sum, stat) => sum + (stat.pomodoros || 0), 0) : taskStats.totalPomodoros}
+                                    </div>
                                     <div className="text-xs text-gray-400">Total Pomodoros</div>
                                 </div>
                                 <div>
                                     <div className="text-xl font-bold text-blue-400">
-                                        {Math.floor(taskStats.totalTime / 60)}
+                                        {Math.floor((isTeamMode ? Object.values(teamStats).reduce((sum, stat) => sum + (stat.pomodoros || 0), 0) : taskStats.totalPomodoros) * 25 / 60)}
                                     </div>
                                     <div className="text-xs text-gray-400">Minutes</div>
                                 </div>
@@ -1828,6 +2131,11 @@ const sliderStyles = `
                         onClose={() => setShowTaskModal(false)}
                         onSave={() => setShowTaskModal(false)}
                     />
+                )}
+
+                {/* Team Modal */}
+                {showTeamModal && (
+                    <TeamModal onClose={() => setShowTeamModal(false)} />
                 )}
             </div>
         );
