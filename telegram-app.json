@@ -4,7 +4,7 @@
   "description": "Neuroscience-based productivity tools including nootropics, binaural beats, pomodoro timer, and training programs",
   "version": "1.0.0",
   "manifest_version": 2,
-  "app_url": "https://github.com/Cryptk1ddo/DFRNT-hub",
+  "app_url": "https://cryptk1ddo.github.io/DFRNT-hub",
   "bot_username": "@DFRNT_bot",
   "commands": [
     {

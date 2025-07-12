@@ -18,13 +18,13 @@
     "neuroscience",
     "telegram-mini-app"
   ],
-  "author": "Your Name",
+  "author": "Cryptk1ddo",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/productivity-hub.git"
+    "url": "https://github.com/Cryptk1ddo/DFRNT-hub.git"
   },
-  "homepage": "https://yourusername.github.io/productivity-hub",
+  "homepage": "https://cryptk1ddo.github.io/DFRNT-hub",
   "dependencies": {},
   "devDependencies": {},
   "browserslist": [

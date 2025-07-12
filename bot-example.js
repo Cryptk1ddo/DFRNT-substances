@@ -4,8 +4,8 @@
 const TelegramBot = require('node-telegram-bot-api');
 
 // Replace with your bot token from BotFather
-const token = 'YOUR_BOT_TOKEN_HERE';
-const webAppUrl = 'https://YOUR_USERNAME.github.io/productivity-hub';
+const token = '7548438786:AAENeVknT4ug_ALAXncSpANGRYZOQ3jCg54';
+const webAppUrl = 'https://cryptk1ddo.github.io/DFRNT-hub';
 
 // Create a bot instance
 const bot = new TelegramBot(token, {polling: true});
